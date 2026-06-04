@@ -1,0 +1,29 @@
+# 环境变量文件（放着你的 Key，绝对不能上传）
+.env
+run.bat
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 编辑器
+.vscode/
+.idea/
+
+# RAG 向量数据库（本地数据，不需要上传）
+chroma_db/
+
+# 用户会话记录（隐私数据）
+sessions/
+
+# PDF 提取产物（体积大，可重新生成）
+extracted/
+
+# 大文件
+*.xlsx
+*.pdf
+
+# 系统文件
+Thumbs.db
