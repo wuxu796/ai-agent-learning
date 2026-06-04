@@ -167,7 +167,9 @@ SYSTEM_PROMPT = (
     "- 如果用户只是想算BMI或TDEE，直接用计算工具即可。\n"
     "- 禁止在回复中提及任何信息来源，包括但不限于：\"根据全书\"、\"书中记载\"、"
     "\"参考资料\"、\"文献显示\"、\"研究表明\"等。直接回答问题本身。\n"
-    "- 回复中避免使用 ~ 符号，用'到'字代替。"
+    "- 回复中避免使用 ~ 符号，用'到'字代替。\n"
+    "- 调用工具是系统行为，禁止在回复正文中输出 <tool_calls>、<invoke>、<function> "
+    "等标签或工具调用语法。直接给出自然语言回答。"
 )
 
 # ==================== 会话管理 ====================
@@ -192,6 +194,14 @@ def save_session(session_id: str, messages: list[dict]):
 
 
 # ==================== Agent ====================
+
+
+def _clean_response(text: str) -> str:
+    """移除模型误输出的工具调用标签"""
+    text = re.sub(r"<tool_calls>[^<]*</tool_calls>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<invoke[^>]*>[\s\S]*?</invoke>", "", text)
+    text = re.sub(r"</?(?:tool_calls|invoke|function|parameter)[^>]*>", "", text)
+    return text.strip()
 
 
 def run_one_turn(session_id: str, user_message: str) -> str:
@@ -314,7 +324,47 @@ def run_one_turn(session_id: str, user_message: str) -> str:
                 messages[-1] = {"role": "assistant", "content": reply}
 
     save_session(session_id, messages)
-    return reply
+    return _clean_response(reply)
+
+
+# ==================== 流式生成器（实验性，已注释） ====================
+
+# import time  # 流式需要
+# from fastapi.responses import StreamingResponse  # 流式需要
+#
+# async def run_one_turn_stream(session_id: str, user_message: str):
+#     """SSE 流式版本，工具决策非流式，最终合成逐字返回。DeepSeek chunk 偏大，效果不明显。"""
+#     messages = load_session(session_id)
+#     messages.append({"role": "user", "content": user_message})
+#     response = client.chat.completions.create(
+#         model=MODEL, messages=messages, tools=TOOLS, temperature=0.0
+#     )
+#     msg = response.choices[0].message
+#     if msg.tool_calls:
+#         # ... 工具执行（同 run_one_turn）...
+#         stream = client.chat.completions.create(
+#             model=MODEL, messages=messages, temperature=0.7, stream=True
+#         )
+#         full_reply = ""
+#         for chunk in stream:
+#             delta = chunk.choices[0].delta
+#             if delta.content:
+#                 full_reply += delta.content
+#                 yield f"data: {json.dumps({'token': delta.content}, ensure_ascii=False)}\n\n"
+#                 # time.sleep(0.01)
+#         messages.append({"role": "assistant", "content": _clean_response(full_reply)})
+#         save_session(session_id, messages)
+#     yield "data: [DONE]\n\n"
+#
+#
+# @app.post("/api/chat/stream")
+# async def chat_stream(req: ChatRequest):
+#     if not req.message.strip():
+#         raise HTTPException(400, "消息不能为空")
+#     return StreamingResponse(
+#         run_one_turn_stream(req.session_id, req.message),
+#         media_type="text/event-stream",
+#     )
 
 
 # ==================== API ====================

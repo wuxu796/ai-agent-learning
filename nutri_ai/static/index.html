@@ -151,7 +151,16 @@
     overflow-x: auto; margin: 8px 0; font-size: 13px;
   }
   .bubble pre code { background: none; padding: 0; }
-  .msg.user .bubble code, .msg.user .bubble pre { background: rgba(255,255,255,0.15); color: #fff; }
+  .bubble table {
+    border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 14px;
+  }
+  .bubble th, .bubble td {
+    border: 1px solid #ddd; padding: 6px 10px; text-align: left;
+  }
+  .bubble th { background: #f5f5f5; font-weight: 600; }
+  .msg.user .bubble table { color: #fff; }
+  .msg.user .bubble th { background: rgba(255,255,255,0.15); }
+  .msg.user .bubble th, .msg.user .bubble td { border-color: rgba(255,255,255,0.2); }
 
   /* 复制按钮 */
   .copy-btn {
@@ -334,7 +343,7 @@ async function send() {
   if (!message) return;
 
   input.value = '';
-  input.style.height = 'auto';  // 重置高度
+  input.style.height = 'auto';
   input.disabled = true;
   btn.disabled = true;
 
@@ -413,6 +422,25 @@ function renderMd(text) {
   // 转义 HTML 防 XSS
   html = escapeHtml(html);
 
+  // 表格（在逐行处理前整体匹配）
+  html = html.replace(/((\|[^\n]+\|\n)+)/g, function(block) {
+    const rows = block.trim().split('\n');
+    if (rows.length < 2) return block;
+    // 检查第二行是否是分隔符 |---|:---:|---|
+    if (!/^[\|\s\-:]+$/.test(rows[1])) return block;
+    let table = '<table>';
+    for (let r = 0; r < rows.length; r++) {
+      if (r === 1) continue; // 跳过分隔行
+      const cells = rows[r].split('|').filter(c => c.trim());
+      const tag = r === 0 ? 'th' : 'td';
+      table += '<tr>';
+      cells.forEach(c => { table += `<${tag}>${c.trim()}</${tag}>`; });
+      table += '</tr>';
+    }
+    table += '</table>';
+    return table;
+  });
+
   // 逐行处理
   const lines = html.split('\n');
   const result = [];
@@ -438,13 +466,13 @@ function renderMd(text) {
     // 粗体 **...**
     line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-    // 标题
-    let hMatch = line.match(/^### (.+)/);
-    if (hMatch) { closeList(); result.push(`<h3>${hMatch[1]}</h3>`); continue; }
-    hMatch = line.match(/^## (.+)/);
-    if (hMatch) { closeList(); result.push(`<h2>${hMatch[1]}</h2>`); continue; }
-    hMatch = line.match(/^# (.+)/);
-    if (hMatch) { closeList(); result.push(`<h1>${hMatch[1]}</h1>`); continue; }
+    // 标题（# 到 ######）
+    let hMatch = line.match(/^(#{1,6}) (.+)/);
+    if (hMatch) {
+      closeList();
+      result.push(`<h${hMatch[1].length}>${hMatch[2]}</h${hMatch[1].length}>`);
+      continue;
+    }
 
     // 无序列表
     let liMatch = line.match(/^[\-\*] (.+)/);
