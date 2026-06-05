@@ -28,8 +28,33 @@
 | 后端 | FastAPI | REST API + 多会话 JSON 持久化 |
 | 前端 | HTML/CSS/JS（零框架） | Markdown 渲染、复制按钮、可折叠侧边栏 |
 | LLM | DeepSeek API / Ollama | 一行环境变量切换 |
+| 部署 | Docker | 一键构建，数据持久化 |
 
 ## 快速开始
+
+### Docker（推荐）
+
+```bash
+# 1. 构建镜像
+docker build -t shijian .
+
+# 2. 创建 .env
+echo 'DEEPSEEK_API_KEY=你的key' > .env
+echo 'LLM_PROVIDER=deepseek' >> .env
+
+# 3. 运行（挂载知识库和会话目录）
+docker run -d --restart=always --name shijian -p 8000:8000 \
+  -v ./chroma_db:/app/chroma_db \
+  -v ./sessions:/app/sessions \
+  shijian
+```
+
+浏览器打开 http://localhost:8000
+
+> 镜像首次构建约 5-10 分钟（下载 PyTorch CPU 版 + embedding 模型），后续启动秒级。
+> 知识库需提前构建（见下方"构建知识库"），或从已有环境拷贝 `chroma_db/` 目录。
+
+### 手动安装
 
 ### 1. 安装依赖
 
@@ -84,11 +109,11 @@ ollama stop qwen2.5:7b
 
 ```
 nutri_ai/
+├── Dockerfile
 ├── extract.py
 ├── engine.py
 ├── build.py
 ├── server.py
-├── app.py
 ├── static/
 │   └── index.html
 ├── extracted/
