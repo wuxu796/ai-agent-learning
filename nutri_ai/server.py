@@ -461,4 +461,4 @@ if __name__ == "__main__":
     import uvicorn
     print(f"\n  食鉴已启动 → http://127.0.0.1:8000")
     print(f"  模型: {MODEL} | 知识库: {rag.get_chunk_count()} 块\n")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
