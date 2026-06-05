@@ -14,4 +14,4 @@ COPY . .
 VOLUME ["/app/chroma_db", "/app/sessions"]
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -c 'from sentence_transformers import SentenceTransformer; SentenceTransformer(\"all-MiniLM-L12-v2\")' && python server.py"]
+CMD ["python", "server.py"]

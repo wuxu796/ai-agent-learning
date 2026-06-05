@@ -29,5 +29,6 @@ services:
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./sessions:/app/sessions
+      - ~/.cache/huggingface:/root/.cache/huggingface   # 复用宿主机的模型缓存，不用重复下载
     depends_on:
       - redis
