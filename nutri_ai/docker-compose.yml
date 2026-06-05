@@ -1,0 +1,33 @@
+# 食鉴 + Redis 容器编排
+# 一键管理两个容器：docker compose up -d
+#
+# 不使用 compose 也可以手动跑：
+#   docker run -d --name redis -p 6379:6379 redis
+#   docker run -d --name shijian -p 8000:8000 -e REDIS_HOST=redis ... shijian
+#   但两个容器不在同一网络，食鉴连不到 Redis！
+#
+# compose 的好处：自动把两个容器放在同一网络，用服务名就能互访
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  shijian:
+    build: .
+    container_name: shijian
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis          # 用 docker compose 服务名当 host
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?请设置 DEEPSEEK_API_KEY}
+      - HF_ENDPOINT=https://hf-mirror.com
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./sessions:/app/sessions
+    depends_on:
+      - redis

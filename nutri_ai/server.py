@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from openai import OpenAI
 
 from engine import BookRAG
+from cache import cache
 
 load_dotenv()
 
@@ -96,7 +97,19 @@ def calculate_tdee(gender: str, age: int, weight: float, height: float, activity
 def search_book(query: str) -> str:
     if rag.get_chunk_count() == 0:
         return "知识库为空，请先运行 python build.py 构建知识库。"
-    return rag.search_and_format(query, n_results=5)
+
+    # 🔥 Redis 缓存：同样的问题不翻两次书
+    cached = cache.get_search(query)
+    if cached:
+        return cached
+
+    result = rag.search_and_format(query, n_results=5)
+
+    # 贴便利贴：下次问同样问题直接返回
+    if result:
+        cache.set_search(query, result)
+
+    return result
 
 
 # ==================== 工具注册表 ====================
@@ -180,17 +193,27 @@ def _session_path(session_id: str) -> Path:
 
 
 def load_session(session_id: str) -> list[dict]:
+    # 🔥 优先读 Redis（内存，毫秒级），读不到再读 JSON 文件（磁盘，慢）
+    data = cache.get_session(session_id)
+    if data is not None:
+        return data
+
     path = _session_path(session_id)
     if path.exists():
-        return json.loads(path.read_text(encoding="utf-8"))
+        messages = json.loads(path.read_text(encoding="utf-8"))
+        # 顺手存 Redis，下次就直接从内存读了
+        cache.set_session(session_id, messages)
+        return messages
     return [{"role": "system", "content": SYSTEM_PROMPT}]
 
 
 def save_session(session_id: str, messages: list[dict]):
+    # 双写：磁盘 JSON（兜底）+ Redis（加速下次读取）
     _session_path(session_id).write_text(
         json.dumps(messages, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    cache.set_session(session_id, messages)
 
 
 # ==================== Agent ====================
@@ -438,6 +461,7 @@ def delete_session(session_id: str):
     path = _session_path(session_id)
     if path.exists():
         path.unlink()
+    cache.delete_session(session_id)
     return {"ok": True}
 
 
