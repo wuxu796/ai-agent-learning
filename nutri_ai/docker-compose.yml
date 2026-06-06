@@ -50,6 +50,6 @@ services:
       - ./chroma_db:/app/chroma_db
       - ./sessions:/app/sessions
       - ~/.cache/huggingface:/root/.cache/huggingface
-    command: ["python", "server_langchain.py"]
+    command: ["python", "-u", "server_langchain.py"]
     depends_on:
       - redis
