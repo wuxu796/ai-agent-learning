@@ -6,7 +6,7 @@ ENV PIP_DEFAULT_TIMEOUT=300
 ENV HF_ENDPOINT=https://hf-mirror.com
 
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && echo "torch OK" \
-  && pip install --no-cache-dir fastapi uvicorn openai python-dotenv pydantic redis && echo "web OK" \
+  && pip install --no-cache-dir fastapi uvicorn openai python-dotenv pydantic redis langchain langchain-openai && echo "web OK" \
   && pip install --no-cache-dir sentence-transformers chromadb numpy && echo "ml OK"
 
 WORKDIR /app

@@ -32,3 +32,24 @@ services:
       - ~/.cache/huggingface:/root/.cache/huggingface   # 复用宿主机的模型缓存，不用重复下载
     depends_on:
       - redis
+
+  # LangChain 版（和手写版并排跑，对比用）
+  shijian-langchain:
+    build: .
+    container_name: shijian-lc
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_HOST=redis
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?请设置 DEEPSEEK_API_KEY}
+      - HF_ENDPOINT=https://hf-mirror.com
+      - PORT=8001
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./sessions:/app/sessions
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    command: ["python", "server_langchain.py"]
+    depends_on:
+      - redis
