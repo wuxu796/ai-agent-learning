@@ -84,19 +84,17 @@ print("[2] 工具定义完成 — 3 个 @tool，无需手写 JSON schema\n")
 # 第三步：Agent 自动编排（替代手写 80 行 if-elif）
 # ====================================================
 
-from langchain.agents import create_tool_calling_agent, AgentExecutor
-from langchain.prompts import ChatPromptTemplate
+from langchain.agents import initialize_agent, AgentType
 
 # 一句话创建 Agent：自动判断调哪个工具、提取参数、拼接结果
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "你叫食鉴，是一个营养健康助手。回答简洁专业。"),
-    ("placeholder", "{chat_history}"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
-
-agent = create_tool_calling_agent(llm, tools, prompt)
-executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+# initialize_agent = LangChain 0.1.x 的写法（你的版本），效果一模一样
+executor = initialize_agent(
+    tools,
+    llm,
+    agent=AgentType.OPENAI_FUNCTIONS,
+    verbose=True,
+    handle_parsing_errors=True,
+)
 
 print("[3] Agent 创建完成 — 一行替代手写 if-elif-elif-elif\n")
 
