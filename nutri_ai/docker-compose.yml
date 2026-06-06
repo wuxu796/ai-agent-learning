@@ -26,6 +26,7 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?请设置 DEEPSEEK_API_KEY}
       - HF_ENDPOINT=https://hf-mirror.com
+      - HF_HUB_OFFLINE=1            # 禁止联网，只用本地缓存的模型
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./sessions:/app/sessions
