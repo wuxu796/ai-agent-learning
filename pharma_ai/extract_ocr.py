@@ -20,6 +20,9 @@ import io
 import numpy as np
 from paddleocr import PaddleOCR
 
+# 禁用 oneDNN（PaddlePaddle CPU 版兼容性 bug）
+os.environ["FLAGS_use_onednn"] = "0"
+
 # ==================== 配置 ====================
 
 BOOKS = [
@@ -83,18 +86,20 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 300) -> str:
     crop_top = int(img.height * 0.10)
     img = img.crop((0, crop_top, img.width, img.height))
 
-    # PaddleOCR 支持 PIL Image 或 numpy array
+    # PaddleOCR 3.x 使用 predict()，传入 numpy array
     img_array = np.array(img)
-    result = ocr.ocr(img_array)
+    result = ocr.predict(img_array)
 
-    if not result or not result[0]:
+    if not result:
         return ""
 
-    # PaddleOCR 输出格式: [[[bbox], (text, confidence)], ...]
+    # PaddleOCR 3.x 输出格式: [{"rec_texts": [...], ...}]
     lines = []
-    for line in result[0]:
-        text = line[1][0]  # 取文字
-        lines.append(text)
+    for res in result:
+        rec_texts = res.get("rec_texts", [])
+        if rec_texts:
+            for text in rec_texts:
+                lines.append(text)
 
     text = "\n".join(lines)
     return clean_ocr(text)
