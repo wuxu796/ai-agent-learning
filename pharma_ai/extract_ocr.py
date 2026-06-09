@@ -30,13 +30,13 @@ BOOKS = [
         "file": "/home/wuxu/pharma_books/《中国药典》2025年版 一部 全本.pdf",
         "name": "一部（中药）",
         "start_page": 51,
-        "dpi": 300,
+        "dpi": 200,
     },
     {
         "file": "/home/wuxu/pharma_books/《中国药典》2025年版 二部.pdf",
         "name": "二部（化学药）",
         "start_page": 51,
-        "dpi": 300,
+        "dpi": 200,
     },
 ]
 
