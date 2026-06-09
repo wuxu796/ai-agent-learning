@@ -86,20 +86,18 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 300) -> str:
     crop_top = int(img.height * 0.10)
     img = img.crop((0, crop_top, img.width, img.height))
 
-    # PaddleOCR 3.x 使用 predict()，传入 numpy array
+    # PaddleOCR 2.x 使用 ocr()，传入 numpy array
     img_array = np.array(img)
-    result = ocr.predict(img_array)
+    result = ocr.ocr(img_array)
 
-    if not result:
+    if not result or not result[0]:
         return ""
 
-    # PaddleOCR 3.x 输出格式: [{"rec_texts": [...], ...}]
+    # PaddleOCR 2.x 输出格式: [[[bbox], (text, confidence)], ...]
     lines = []
-    for res in result:
-        rec_texts = res.get("rec_texts", [])
-        if rec_texts:
-            for text in rec_texts:
-                lines.append(text)
+    for line in result[0]:
+        text = line[1][0]  # 取文字
+        lines.append(text)
 
     text = "\n".join(lines)
     return clean_ocr(text)
