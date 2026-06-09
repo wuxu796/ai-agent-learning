@@ -1,11 +1,13 @@
 """
-药典 PDF 提取 — PaddleOCR 版
-============================
-在 VM 上运行（Python 3.10 + PaddlePaddle）
+药典 PDF 提取 — PaddleOCR GPU 版
+================================
+在 Windows 上运行（Python 3.12 + PaddlePaddle GPU + RTX 4060 Ti）
+
 用法：
-  python3 extract_ocr.py --part1-only --limit=5    # 一部前5页测试
-  python3 extract_ocr.py --part1-only              # 一部全量
-  python3 extract_ocr.py                           # 一部+二部全量
+  cd pharma_ai
+  .\paddle_env\Scripts\python extract_ocr.py --part1-only --limit=5
+  .\paddle_env\Scripts\python extract_ocr.py --part1-only
+  .\paddle_env\Scripts\python extract_ocr.py
 """
 import json
 import os
@@ -20,32 +22,29 @@ import io
 import numpy as np
 from paddleocr import PaddleOCR
 
-# 禁用 oneDNN（PaddlePaddle CPU 版兼容性 bug）
-os.environ["FLAGS_use_onednn"] = "0"
-
 # ==================== 配置 ====================
 
 BOOKS = [
     {
-        "file": "/home/wuxu/pharma_books/《中国药典》2025年版 一部 全本.pdf",
+        "file": "../books/《中国药典》2025年版 一部 全本.pdf",
         "name": "一部（中药）",
         "start_page": 51,
         "dpi": 200,
     },
     {
-        "file": "/home/wuxu/pharma_books/《中国药典》2025年版 二部.pdf",
+        "file": "../books/《中国药典》2025年版 二部.pdf",
         "name": "二部（化学药）",
         "start_page": 51,
         "dpi": 200,
     },
 ]
 
-OUTPUT_DIR = Path("/home/wuxu/pharma_output")
+OUTPUT_DIR = Path("extracted")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # ==================== 初始化 PaddleOCR ====================
 
-print("初始化 PaddleOCR ...")
+print("初始化 PaddleOCR (GPU) ...")
 ocr = PaddleOCR(lang="ch")
 print("PaddleOCR 就绪\n")
 
@@ -76,7 +75,7 @@ def clean_ocr(text: str) -> str:
 # ==================== OCR 单页 ====================
 
 
-def ocr_page(pdf_doc, page_idx: int, dpi: int = 300) -> str:
+def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
     """PaddleOCR 单页，裁顶 10% 去页眉"""
     page = pdf_doc[page_idx]
     pix = page.get_pixmap(dpi=dpi)
@@ -86,18 +85,18 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 300) -> str:
     crop_top = int(img.height * 0.10)
     img = img.crop((0, crop_top, img.width, img.height))
 
-    # PaddleOCR 2.x 使用 ocr()，传入 numpy array
     img_array = np.array(img)
-    result = ocr.ocr(img_array)
+    result = ocr.predict(img_array)
 
-    if not result or not result[0]:
+    if not result:
         return ""
 
-    # PaddleOCR 2.x 输出格式: [[[bbox], (text, confidence)], ...]
     lines = []
-    for line in result[0]:
-        text = line[1][0]  # 取文字
-        lines.append(text)
+    for res in result:
+        rec_texts = res.get("rec_texts", [])
+        if rec_texts:
+            for text in rec_texts:
+                lines.append(text)
 
     text = "\n".join(lines)
     return clean_ocr(text)
@@ -118,6 +117,7 @@ def extract_book(book_config: dict, limit: int | None = None):
 
     print(f"\n{'='*50}")
     print(f"[开始] {name}")
+    print(f"   文件: {filepath}")
     print(f"   起始页: {start_page}  DPI: {dpi}")
     print(f"{'='*50}")
 
