@@ -76,11 +76,10 @@ def clean_ocr(text: str) -> str:
 
 
 def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
-    """PaddleOCR 单页，跳过页眉区域（用文字位置判断，不裁图）"""
+    """PaddleOCR 单页，不裁图，文字级过滤页眉"""
     page = pdf_doc[page_idx]
     pix = page.get_pixmap(dpi=dpi)
     img = Image.open(io.BytesIO(pix.tobytes("png")))
-    img_height = img.height
 
     img_array = np.array(img)
     result = ocr.predict(img_array)
@@ -88,23 +87,28 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
     if not result:
         return ""
 
-    # 跳过顶部 10% 区域的文字（页眉），保留其余
-    header_zone = int(img_height * 0.10)
+    # 收集全部文字行，只过滤页眉行（按内容匹配，不按坐标）
     lines = []
     for res in result:
-        # 获取检测框坐标
-        boxes = res.get("dt_polys", [])
         rec_texts = res.get("rec_texts", [])
+        boxes = res.get("dt_polys", [])
         for i, text in enumerate(rec_texts):
-            if i < len(boxes):
-                box = boxes[i]
-                # 取文字框上沿 y 坐标
-                y_top = min(p[1] for p in box)
-                # 在页眉区域内且是页眉关键词 → 跳过
-                if y_top < header_zone and re.match(
-                    r"^[画中]?国药典|年版|\d+$", text.strip()
-                ):
-                    continue
+            stripped = text.strip()
+
+            # 获取当前文字行的 y 坐标（用于判断是否在页眉区域）
+            is_top = False
+            if i < len(boxes) and boxes[i]:
+                y_top = min(p[1] for p in boxes[i])
+                if y_top < img.height * 0.10:
+                    is_top = True
+
+            # 只在顶部区域且匹配页眉特征才过滤
+            if is_top and re.match(
+                r"^(?:[画中]?国药典.*\d{4}\s*年?版|^\d{1,4}$|\d+\s*$)",
+                stripped
+            ):
+                continue
+
             lines.append(text)
 
     text = "\n".join(lines)
