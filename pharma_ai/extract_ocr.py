@@ -97,7 +97,7 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
 
             # 获取当前文字行的 y 坐标（用于判断是否在页眉区域）
             is_top = False
-            if i < len(boxes) and boxes[i]:
+            if i < len(boxes) and len(boxes[i]) > 0:
                 y_top = min(p[1] for p in boxes[i])
                 if y_top < img.height * 0.10:
                     is_top = True
