@@ -76,14 +76,11 @@ def clean_ocr(text: str) -> str:
 
 
 def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
-    """PaddleOCR 单页，裁顶 10% 去页眉"""
+    """PaddleOCR 单页，跳过页眉区域（用文字位置判断，不裁图）"""
     page = pdf_doc[page_idx]
     pix = page.get_pixmap(dpi=dpi)
     img = Image.open(io.BytesIO(pix.tobytes("png")))
-
-    # 裁掉顶部 10%
-    crop_top = int(img.height * 0.10)
-    img = img.crop((0, crop_top, img.width, img.height))
+    img_height = img.height
 
     img_array = np.array(img)
     result = ocr.predict(img_array)
@@ -91,12 +88,24 @@ def ocr_page(pdf_doc, page_idx: int, dpi: int = 200) -> str:
     if not result:
         return ""
 
+    # 跳过顶部 10% 区域的文字（页眉），保留其余
+    header_zone = int(img_height * 0.10)
     lines = []
     for res in result:
+        # 获取检测框坐标
+        boxes = res.get("dt_polys", [])
         rec_texts = res.get("rec_texts", [])
-        if rec_texts:
-            for text in rec_texts:
-                lines.append(text)
+        for i, text in enumerate(rec_texts):
+            if i < len(boxes):
+                box = boxes[i]
+                # 取文字框上沿 y 坐标
+                y_top = min(p[1] for p in box)
+                # 在页眉区域内且是页眉关键词 → 跳过
+                if y_top < header_zone and re.match(
+                    r"^[画中]?国药典|年版|\d+$", text.strip()
+                ):
+                    continue
+            lines.append(text)
 
     text = "\n".join(lines)
     return clean_ocr(text)
