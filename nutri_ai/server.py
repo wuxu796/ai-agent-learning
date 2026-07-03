@@ -9,11 +9,12 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from openai import OpenAI
 
 from engine import BookRAG
@@ -47,6 +48,71 @@ SESSIONS_DIR = Path("sessions")
 SESSIONS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="食鉴")
+
+SESSION_ID_RE = re.compile(r"^[a-f0-9]{12}$")
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
+ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".jfif", ".png", ".webp"}
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/pjpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+GENERIC_UPLOAD_TYPES = {"application/octet-stream", "binary/octet-stream"}
+
+
+def api_error(code: str, message: str, retryable: bool = False) -> dict:
+    """统一 API 错误结构，方便前端展示和后续监控统计。"""
+    return {
+        "error": code,
+        "message": message,
+        "retryable": retryable,
+    }
+
+
+def require_session_id(session_id: str) -> str:
+    """校验会话 ID，避免路径穿越和异常文件名。"""
+    if not SESSION_ID_RE.fullmatch(session_id or ""):
+        raise HTTPException(
+            status_code=422,
+            detail=api_error("invalid_session_id", "会话 ID 不合法", retryable=False),
+        )
+    return session_id
+
+
+async def read_valid_image_upload(image: UploadFile) -> tuple[bytes, str]:
+    """读取并校验上传图片，限制类型和大小。"""
+    suffix = Path(image.filename or "").suffix.lower()
+    content_type = (image.content_type or "").split(";", 1)[0].lower()
+
+    if content_type and content_type not in ALLOWED_IMAGE_TYPES and content_type not in GENERIC_UPLOAD_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=api_error("unsupported_image_type", "仅支持 JPG、JPEG、PNG、WEBP 图片", retryable=False),
+        )
+
+    if suffix not in ALLOWED_IMAGE_SUFFIXES:
+        suffix = ALLOWED_IMAGE_TYPES.get(content_type, "")
+    if suffix not in ALLOWED_IMAGE_SUFFIXES:
+        raise HTTPException(
+            status_code=415,
+            detail=api_error("unsupported_image_type", "仅支持 JPG、JPEG、PNG、WEBP 图片", retryable=False),
+        )
+
+    data = await image.read(MAX_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error("empty_image", "上传图片不能为空", retryable=False),
+        )
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=api_error("image_too_large", "图片过大，请上传 8MB 以内的图片", retryable=False),
+        )
+
+    return data, suffix
 
 # ==================== 工具函数 ====================
 
@@ -394,8 +460,25 @@ def run_one_turn(session_id: str, user_message: str) -> str:
 
 
 class ChatRequest(BaseModel):
-    session_id: str
-    message: str
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=12, max_length=12)
+    message: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session(cls, v: str) -> str:
+        if not SESSION_ID_RE.fullmatch(v):
+            raise ValueError("会话 ID 不合法")
+        return v
+
+    @field_validator("message")
+    @classmethod
+    def strip_message(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("消息不能为空")
+        return v
 
 
 class ChatResponse(BaseModel):
@@ -405,8 +488,6 @@ class ChatResponse(BaseModel):
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    if not req.message.strip():
-        raise HTTPException(400, "消息不能为空")
     reply = run_one_turn(req.session_id, req.message)
     return ChatResponse(session_id=req.session_id, reply=reply)
 
@@ -447,6 +528,7 @@ def create_session():
 
 @app.get("/api/sessions/{session_id}")
 def get_session(session_id: str):
+    require_session_id(session_id)
     messages = load_session(session_id)
     chat = [
         {"role": m["role"], "content": m["content"]}
@@ -458,6 +540,7 @@ def get_session(session_id: str):
 
 @app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: str):
+    require_session_id(session_id)
     path = _session_path(session_id)
     if path.exists():
         path.unlink()
@@ -467,12 +550,102 @@ def delete_session(session_id: str):
 
 @app.get("/api/health")
 def health():
+    rag_stats = rag.get_stats()
     return {
         "status": "ok",
-        "chunks": rag.get_chunk_count(),
+        "chunks": rag_stats["total_chunks"],
+        "rag_model_ready": rag_stats["model_ready"],
+        "rag_model_error": rag_stats["model_error"],
         "model": MODEL,
         "provider": LLM_PROVIDER,
     }
+
+
+# ==================== 食鉴 2.0 扫描分析 API ====================
+
+
+@app.post("/vision")
+async def vision(image: UploadFile = File(...)):
+    """
+    上传食品标签图片，返回结构化识别结果。
+
+    这里使用懒加载导入，避免只使用聊天问答时也加载视觉模型相关依赖。
+    """
+    import tempfile
+
+    from vision import VisionError, scan_label
+
+    image_bytes, suffix = await read_valid_image_upload(image)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(image_bytes)
+        tmp_path = tmp.name
+
+    try:
+        return scan_label(tmp_path)
+    except VisionError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=api_error("vision_failed", str(e), retryable=e.retryable),
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=api_error("vision_internal_error", f"配料表识别失败: {e}", retryable=True),
+        ) from e
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+class UserProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    height: float | None = Field(default=None, ge=100, le=250)
+    weight: float | None = Field(default=None, ge=20, le=300)
+    age: int | None = Field(default=None, ge=10, le=120)
+    gender: Literal["男", "女"] | None = None
+    activity: Literal["久坐", "轻度", "中度", "高度", "运动员"] | None = None
+    concerns: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("concerns")
+    @classmethod
+    def validate_concerns(cls, values: list[str]) -> list[str]:
+        cleaned = []
+        for item in values:
+            item = str(item).strip()
+            if not item:
+                continue
+            if len(item) > 20:
+                raise ValueError("关注项过长")
+            cleaned.append(item)
+        return list(dict.fromkeys(cleaned))
+
+
+class AnalyzeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vision_json: dict
+    profile: UserProfileRequest | None = None
+
+
+@app.post("/analyze")
+def analyze(req: AnalyzeRequest):
+    """基于视觉识别结果和用户画像，返回营养分析。"""
+    from analysis_pipeline import AnalysisError, full_analysis
+
+    profile = req.profile.model_dump(exclude_none=True) if req.profile else None
+
+    try:
+        return full_analysis(req.vision_json, profile)
+    except AnalysisError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=api_error("analysis_invalid_input", str(e), retryable=False),
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=api_error("analysis_internal_error", f"营养分析失败: {e}", retryable=True),
+        ) from e
 
 
 # 静态文件（前端页面）

@@ -3,550 +3,267 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>食鉴</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, "Microsoft YaHei", sans-serif;
-    background: #f5f5f5;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-  }
-  .app {
-    width: 100%;
-    max-width: 900px;
-    height: 100vh;
-    display: flex;
-    background: #fff;
-  }
-
-  /* 侧边栏 */
-  .sidebar {
-    width: 260px;
-    min-width: 260px;
-    border-right: 1px solid #eee;
-    display: flex;
-    flex-direction: column;
-    background: #fafafa;
-    transition: width 0.2s, min-width 0.2s;
-    overflow: hidden;
-  }
-  .sidebar.collapsed { width: 0; min-width: 0; border: none; }
-  .toggle-sidebar {
-    background: none; border: none; font-size: 18px;
-    cursor: pointer; padding: 2px 8px; color: #999;
-  }
-  .toggle-sidebar:hover { color: #333; }
-  .sidebar-header {
-    padding: 16px;
-    border-bottom: 1px solid #eee;
-  }
-  .sidebar-header h2 { font-size: 18px; margin-bottom: 10px; }
-  .sidebar-header button {
-    width: 100%;
-    padding: 8px;
-    background: #1677ff;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  .sidebar-header button:hover { background: #4096ff; }
-  .session-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-  }
-  .session-item {
-    padding: 10px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    margin-bottom: 4px;
-    transition: background 0.15s;
-  }
-  .session-item:hover { background: #eee; }
-  .session-item.active { background: #e6f0ff; }
-  .session-item .preview {
-    font-size: 13px;
-    color: #333;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .session-item .meta {
-    font-size: 11px;
-    color: #999;
-    margin-top: 3px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .session-item .delete-btn {
-    opacity: 0;
-    color: #d44;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0 4px;
-  }
-  .session-item:hover .delete-btn { opacity: 1; }
-
-  /* 主聊天区 */
-  .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .main-header {
-    padding: 14px 20px;
-    border-bottom: 1px solid #eee;
-    font-size: 17px;
-    font-weight: 600;
-  }
-  .chat {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-  }
-  .msg { margin-bottom: 18px; position: relative; }
-  .msg.user { text-align: right; }
-  .msg .bubble {
-    display: inline-block;
-    max-width: 85%;
-    padding: 10px 16px;
-    border-radius: 12px;
-    font-size: 15px;
-    line-height: 1.55;
-    word-break: break-word;
-    text-align: left;
-    position: relative;
-  }
-  .msg.user .bubble {
-    background: #1677ff;
-    color: #fff;
-    border-bottom-right-radius: 4px;
-  }
-  .msg.assistant .bubble {
-    background: #f0f0f0;
-    color: #333;
-    border-bottom-left-radius: 4px;
-  }
-  /* Markdown 内容样式 */
-  .bubble h1, .bubble h2, .bubble h3 { margin: 8px 0 4px; font-size: 1.05em; }
-  .bubble p { margin: 2px 0; }
-  .bubble ul, .bubble ol { padding-left: 20px; margin: 2px 0; }
-  .bubble li { margin: 2px 0; }
-  .bubble strong { font-weight: 600; }
-  .bubble code {
-    background: rgba(0,0,0,0.08); padding: 1px 5px;
-    border-radius: 3px; font-size: 0.9em;
-  }
-  .bubble pre {
-    background: #282c34; color: #abb2bf;
-    padding: 12px 16px; border-radius: 8px;
-    overflow-x: auto; margin: 8px 0; font-size: 13px;
-  }
-  .bubble pre code { background: none; padding: 0; }
-  .bubble table {
-    border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 14px;
-  }
-  .bubble th, .bubble td {
-    border: 1px solid #ddd; padding: 6px 10px; text-align: left;
-  }
-  .bubble th { background: #f5f5f5; font-weight: 600; }
-  .msg.user .bubble table { color: #fff; }
-  .msg.user .bubble th { background: rgba(255,255,255,0.15); }
-  .msg.user .bubble th, .msg.user .bubble td { border-color: rgba(255,255,255,0.2); }
-
-  /* 复制按钮 */
-  .copy-btn {
-    position: absolute;
-    top: 4px; right: 4px;
-    background: rgba(0,0,0,0.06);
-    border: none; border-radius: 4px;
-    cursor: pointer; font-size: 13px;
-    padding: 2px 6px; color: #999;
-    opacity: 0; transition: opacity 0.15s;
-  }
-  .msg.assistant .bubble:hover .copy-btn { opacity: 1; }
-  .copy-btn.copied { color: #52c41a; }
-
-  /* 输入区 */
-  .input-area {
-    padding: 12px 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-  }
-  .input-area textarea {
-    flex: 1;
-    padding: 10px 14px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 15px;
-    outline: none;
-    font-family: inherit;
-    resize: none;
-    min-height: 42px;
-    max-height: 150px;
-    line-height: 1.4;
-  }
-  .input-area textarea:focus { border-color: #1677ff; }
-  .input-area button {
-    padding: 10px 20px;
-    background: #1677ff;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 15px;
-    white-space: nowrap;
-    height: 42px;
-  }
-  .input-area button:hover { background: #4096ff; }
-  .input-area button:disabled { background: #bbb; cursor: not-allowed; }
-  .thinking { color: #999; font-style: italic; padding: 8px 0; font-size: 14px; }
-  .empty { text-align: center; color: #bbb; margin-top: 100px; }
-  .empty p { margin: 8px 0; font-size: 14px; }
-
-  @media (max-width: 640px) {
-    .sidebar { display: none; }
-    .input-area { padding: 8px 12px; }
-  }
-</style>
+<title>食鉴 · 配料分析</title>
+<link rel="stylesheet" href="style.css?v=20260702-ocr-fix">
 </head>
 <body>
-<div class="app">
-  <!-- 侧边栏 -->
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h2>食鉴</h2>
-      <button onclick="newSession()">+ 新对话</button>
-    </div>
-    <div class="session-list" id="sessionList"></div>
-  </div>
 
-  <!-- 主聊天区 -->
-  <div class="main">
-    <div class="main-header">
-      <button class="toggle-sidebar" onclick="toggleSidebar()" title="收起/展开侧边栏">☰</button>
-      <span>营养健康助手</span>
-    </div>
-    <div class="chat" id="chat">
-      <div class="empty" id="emptyState">
-        <p>👋 你好，我是食鉴</p>
-        <p>算 BMI · 算每日消耗 · 搜全书知识</p>
+<main class="app">
+
+  <h1 class="app-title">🍎 食鉴</h1>
+  <p class="app-subtitle">拍配料表，也能问营养知识</p>
+
+  <nav class="mode-menu" aria-label="功能菜单">
+    <button class="mode-btn active" type="button" data-mode="scan" aria-expanded="true">
+      <span>📷</span>
+      <strong>配料分析</strong>
+      <small>拍照识别食品标签</small>
+    </button>
+    <button class="mode-btn" type="button" data-mode="chat" aria-expanded="false">
+      <span>💬</span>
+      <strong>营养问答</strong>
+      <small>RAG 知识库助手</small>
+    </button>
+  </nav>
+
+  <!-- 全局错误提示（位于步骤容器之外，始终可见） -->
+  <div class="error-banner" id="errorBanner" style="display:none" role="alert"></div>
+
+  <section class="mode-panel active" id="scanPanel">
+    <!-- 步骤①：拍照 -->
+    <section class="step active" id="step1">
+      <div class="card capture-card" id="captureCard" role="button" tabindex="0" aria-label="点击拍照或上传配料表图片">
+        <span class="capture-icon" aria-hidden="true">📷</span>
+        <p class="capture-text">点击拍照或上传配料表</p>
+        <input type="file" id="fileInput" accept="image/*" capture="environment" aria-hidden="true">
+      </div>
+      <p class="step-hint">💡 请尽量拍清晰，确保配料表完整</p>
+    </section>
+
+    <!-- 步骤②：确认 -->
+    <section class="step" id="step2">
+    <div class="card preview-card">
+      <img id="previewImg" src="" alt="配料表预览" style="display:none">
+      <p class="preview-text" id="previewPlaceholder">📝 图片已就绪</p>
+      <div class="btn-row">
+        <button class="btn btn-outline" id="retakeBtn">重新拍照</button>
+        <button class="btn btn-primary" id="confirmBtn">确认，下一步</button>
       </div>
     </div>
-    <div class="input-area">
-      <textarea id="input" placeholder="问点什么…  Enter 发送，Shift+Enter 换行" rows="1"></textarea>
-      <button id="sendBtn" onclick="send()">发送</button>
-    </div>
-  </div>
-</div>
+    </section>
 
-<script>
-let sessionId = null;
+    <!-- 步骤③：健康画像 -->
+    <section class="step" id="step3">
+    <div class="card body-card">
+      <p class="section-label">📏 身体数据</p>
 
-function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('collapsed');
-}
+      <div class="body-row">
+        <div class="body-field">
+          <label for="heightInput">身高</label>
+          <input type="number" id="heightInput" value="170" min="100" max="250" step="1">
+          <span class="unit">cm</span>
+        </div>
+        <div class="body-field">
+          <label for="weightInput">体重</label>
+          <input type="number" id="weightInput" value="65" min="20" max="300" step="0.1">
+          <span class="unit">kg</span>
+        </div>
+      </div>
 
-// ==================== 初始化 ====================
+      <div class="body-row">
+        <div class="body-field">
+          <label for="ageInput">年龄</label>
+          <input type="number" id="ageInput" value="30" min="10" max="120" step="1">
+          <span class="unit">岁</span>
+        </div>
+        <div class="body-field">
+          <label for="genderSelect">性别</label>
+          <select id="genderSelect" class="body-select">
+            <option value="">不填</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+          </select>
+        </div>
+        <div class="body-field">
+          <label for="activitySelect">活动量</label>
+          <select id="activitySelect" class="body-select">
+            <option value="">不填</option>
+            <option value="久坐">久坐</option>
+            <option value="轻度">轻度</option>
+            <option value="中度">中度</option>
+            <option value="高度">高度</option>
+            <option value="运动员">运动员</option>
+          </select>
+        </div>
+      </div>
 
-async function init() {
-  await refreshSessionList();
-  const lastId = localStorage.getItem('sessionId');
-  const items = document.querySelectorAll('.session-item');
-  let target = null;
-  if (lastId) target = document.querySelector(`[data-sid="${lastId}"]`);
-  if (!target) target = items[0];
-  if (target) {
-    target.click();
-  } else {
-    await newSession();
-  }
-}
-
-// ==================== 会话列表 ====================
-
-function formatDate(isoStr) {
-  const d = new Date(isoStr);
-  const now = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  // 今天的只显示时间，更早的显示月-日
-  if (d.toDateString() === now.toDateString()) return time;
-  return `${d.getMonth() + 1}-${pad(d.getDate())} ${time}`;
-}
-
-async function refreshSessionList() {
-  const res = await fetch('/api/sessions');
-  const sessions = await res.json();
-  const list = document.getElementById('sessionList');
-  list.innerHTML = sessions.map(s => `
-    <div class="session-item${s.session_id === sessionId ? ' active' : ''}"
-         data-sid="${s.session_id}" onclick="loadSession('${s.session_id}')">
-      <div class="preview">${escapeHtml(s.preview)}</div>
-      <div class="meta">
-        <span>${s.message_count} 条 · ${formatDate(s.created_at)}</span>
-        <button class="delete-btn" onclick="deleteSession(event, '${s.session_id}')">✕</button>
+      <div class="bmi-display" id="bmiDisplay">
+        <span class="bmi-value" id="bmiValue">22.5</span>
+        <span class="bmi-status" id="bmiStatus">🟢 正常</span>
+        <span class="bmi-tip" id="bmiTip">体重在健康范围，继续保持</span>
       </div>
     </div>
-  `).join('');
-}
 
-function highlightActive() {
-  document.querySelectorAll('.session-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.sid === sessionId);
-  });
-}
+    <div class="card tag-card">
+      <p class="section-label">🏥 特殊状况（可多选）</p>
+      <div class="tag-group" id="healthTags" role="group" aria-label="选择健康相关状况">
+        <span class="tag" data-val="糖尿病" role="checkbox" aria-checked="false" tabindex="0">2型糖尿病</span>
+        <span class="tag" data-val="痛风" role="checkbox" aria-checked="false" tabindex="0">痛风 / 高尿酸</span>
+        <span class="tag" data-val="减脂" role="checkbox" aria-checked="false" tabindex="0">减脂控重</span>
+        <span class="tag" data-val="孕期" role="checkbox" aria-checked="false" tabindex="0">孕期营养</span>
+        <span class="tag" data-val="坚果过敏" role="checkbox" aria-checked="false" tabindex="0">坚果过敏</span>
+        <span class="tag" data-val="海鲜过敏" role="checkbox" aria-checked="false" tabindex="0">海鲜过敏</span>
+        <span class="tag" data-val="乳糖不耐" role="checkbox" aria-checked="false" tabindex="0">乳糖不耐受</span>
+      </div>
+    </div>
 
-// ==================== 加载/创建会话 ====================
+    <div class="card tag-card">
+      <p class="section-label">🎯 关注重点（可多选）</p>
+      <div class="tag-group" id="focusTags" role="group" aria-label="选择营养关注重点">
+        <span class="tag" data-val="控糖" role="checkbox" aria-checked="false" tabindex="0">🍬 控糖</span>
+        <span class="tag" data-val="减脂" role="checkbox" aria-checked="false" tabindex="0">🔥 减脂</span>
+        <span class="tag" data-val="低嘌呤" role="checkbox" aria-checked="false" tabindex="0">🍺 低嘌呤</span>
+        <span class="tag" data-val="高钙" role="checkbox" aria-checked="false" tabindex="0">🥛 高钙</span>
+        <span class="tag" data-val="低钠" role="checkbox" aria-checked="false" tabindex="0">🧂 低钠</span>
+        <span class="tag" data-val="无乳糖" role="checkbox" aria-checked="false" tabindex="0">🥛 无乳糖</span>
+        <span class="tag" data-val="高蛋白" role="checkbox" aria-checked="false" tabindex="0">🥚 高蛋白</span>
+        <span class="tag" data-val="高纤维" role="checkbox" aria-checked="false" tabindex="0">🥦 高纤维</span>
+      </div>
+    </div>
 
-async function loadSession(sid) {
-  sessionId = sid;
-  localStorage.setItem('sessionId', sid);
-  highlightActive();
+    <button class="btn btn-primary btn-full" id="analyzeBtn">🔍 开始分析</button>
+    <p class="privacy-hint">⚡ 以上信息仅用于本次分析，不会上传或保存</p>
+    </section>
 
-  const res = await fetch(`/api/sessions/${sid}`);
-  const data = await res.json();
-  const chat = document.getElementById('chat');
-  chat.innerHTML = '';
+    <!-- 步骤④：加载 + 结果 -->
+    <section class="step" id="step4">
+    <div class="card loading-card" id="loadingBox">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="load-steps" id="loadSteps">
+        <div class="load-step done" id="load1">⏳ 正在识别配料表文字...</div>
+        <div class="load-step" id="load2">⏳ 正在解析营养成分...</div>
+        <div class="load-step" id="load3">⏳ 正在生成健康建议...</div>
+      </div>
+    </div>
 
-  if (data.messages.length === 0) {
-    chat.innerHTML = `<div class="empty"><p>👋 开始新对话</p></div>`;
-  } else {
-    data.messages.forEach(m => appendMsg(m.role, m.content));
-  }
-  scrollBottom();
-}
+    <div class="ocr-editor" id="ocrEditor" style="display:none">
+      <div class="card ocr-card">
+        <p class="section-label">📝 核对识别结果</p>
 
-async function newSession() {
-  const res = await fetch('/api/sessions', { method: 'POST' });
-  const data = await res.json();
-  await refreshSessionList();
-  await loadSession(data.session_id);
-}
+        <div class="ocr-field">
+          <label for="ocrProductName">品名</label>
+          <input type="text" id="ocrProductName" placeholder="未识别到可留空">
+        </div>
 
-// ==================== 发送消息 ====================
+        <div class="ocr-field">
+          <label for="ocrIngredients">配料（每行一个）</label>
+          <textarea id="ocrIngredients" rows="6" placeholder="例如：小麦粉&#10;白砂糖&#10;植物油"></textarea>
+        </div>
 
-async function send() {
-  const input = document.getElementById('input');
-  const btn = document.getElementById('sendBtn');
-  const message = input.value.trim();
-  if (!message) return;
+        <div class="ocr-field">
+          <label for="ocrAdditives">添加剂（每行一个）</label>
+          <textarea id="ocrAdditives" rows="4" placeholder="例如：柠檬酸&#10;山梨酸钾"></textarea>
+        </div>
 
-  input.value = '';
-  input.style.height = 'auto';
-  input.disabled = true;
-  btn.disabled = true;
+        <div class="nutrition-grid" aria-label="营养成分每100克">
+          <div class="ocr-field">
+            <label for="ocrEnergy">能量 kJ</label>
+            <input type="number" id="ocrEnergy" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrFat">脂肪 g</label>
+            <input type="number" id="ocrFat" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrSatFat">饱和脂肪 g</label>
+            <input type="number" id="ocrSatFat" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrTransFat">反式脂肪 g</label>
+            <input type="number" id="ocrTransFat" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrCarb">碳水 g</label>
+            <input type="number" id="ocrCarb" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrSugar">糖 g</label>
+            <input type="number" id="ocrSugar" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrProtein">蛋白质 g</label>
+            <input type="number" id="ocrProtein" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrSodium">钠 mg</label>
+            <input type="number" id="ocrSodium" min="0" step="0.1">
+          </div>
+          <div class="ocr-field">
+            <label for="ocrServing">每份 g</label>
+            <input type="number" id="ocrServing" min="0" step="0.1">
+          </div>
+        </div>
 
-  appendMsg('user', message);
+        <div class="btn-row">
+          <button class="btn btn-outline" id="editBackBtn" type="button">返回修改信息</button>
+          <button class="btn btn-primary" id="confirmOcrBtn" type="button">确认并分析</button>
+        </div>
+      </div>
+    </div>
 
-  const chat = document.getElementById('chat');
-  const think = document.createElement('div');
-  think.className = 'thinking';
-  think.id = 'thinking';
-  think.textContent = '思考中...';
-  chat.appendChild(think);
-  scrollBottom();
+    <div class="result-box" id="resultBox" style="display:none">
 
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, message }),
-    });
-    const data = await res.json();
-    document.getElementById('thinking')?.remove();
-    appendMsg('assistant', data.reply);
-    scrollBottom();
-    refreshSessionList();
-  } catch (e) {
-    document.getElementById('thinking')?.remove();
-    appendMsg('assistant', '出错了，请稍后重试。');
-  }
+      <!-- 品名 -->
+      <div class="product-name-box" id="productBox"></div>
 
-  input.disabled = false;
-  btn.disabled = false;
-  input.focus();
-}
+      <!-- 结论卡片 -->
+      <div class="conclusion-card" id="conclusionCard"></div>
 
-// ==================== 删除会话 ====================
+      <!-- 关键指标 -->
+      <div class="indicator-row" id="indicatorRow"></div>
 
-async function deleteSession(e, sid) {
-  e.stopPropagation();
-  await fetch(`/api/sessions/${sid}`, { method: 'DELETE' });
-  if (sid === sessionId) {
-    sessionId = null;
-    localStorage.removeItem('sessionId');
-  }
-  await refreshSessionList();
-  if (!sessionId) {
-    const first = document.querySelector('.session-item');
-    if (first) first.click();
-    else await newSession();
-  }
-}
+      <!-- 配料红绿灯 -->
+      <details class="card traffic-card" id="trafficCard" open>
+        <summary class="traffic-summary">📋 配料红绿灯</summary>
+        <ul class="traffic-list" id="trafficList"></ul>
+        <button class="btn-expand" id="expandBtn">展开全部 ▼</button>
+      </details>
 
-// ==================== 复制消息 ====================
+      <!-- 个性化建议 -->
+      <div class="card advice-card" id="adviceCard">
+        <h3>💡 给您的建议</h3>
+        <div class="advice-body" id="adviceBody"></div>
+      </div>
 
-function copyMsg(btn) {
-  const bubble = btn.closest('.bubble');
-  // 获取纯文本内容
-  const text = bubble.textContent || '';
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = '已复制';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500);
-  });
-}
+      <!-- 营养师解读 -->
+      <div class="card analysis-card" id="analysisCard">
+        <h3>📖 营养师解读</h3>
+        <div class="analysis-body" id="analysisBody"></div>
+      </div>
 
-// ==================== Markdown 渲染 ====================
+      <button class="btn btn-outline btn-full" id="retryBtn">🔄 再测一次</button>
+    </div>
+    </section>
+  </section>
 
-function renderMd(text) {
-  // 代码块先保护起来，避免被后续规则干扰
-  const codeBlocks = [];
-  let html = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const id = codeBlocks.length;
-    codeBlocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
-    return `%%CODEBLOCK_${id}%%`;
-  });
+  <section class="mode-panel" id="chatPanel" aria-label="营养知识问答">
+    <div class="chat-shell">
+      <div class="chat-log" id="chatLog">
+        <div class="chat-message assistant">
+          <div class="bubble">
+            可以问我营养学知识、BMI、TDEE，或者某类食品适不适合你。我会优先检索本地营养知识库再回答。
+          </div>
+        </div>
+      </div>
+      <form class="chat-form" id="chatForm">
+        <textarea id="chatInput" rows="2" placeholder="例如：高钠饮食为什么要少吃？我身高170体重65，BMI正常吗？"></textarea>
+        <button class="btn btn-primary chat-send" type="submit">发送</button>
+      </form>
+    </div>
+  </section>
 
-  // 转义 HTML 防 XSS
-  html = escapeHtml(html);
+</main>
 
-  // 表格（在逐行处理前整体匹配）
-  html = html.replace(/((\|[^\n]+\|\n)+)/g, function(block) {
-    const rows = block.trim().split('\n');
-    if (rows.length < 2) return block;
-    // 检查第二行是否是分隔符 |---|:---:|---|
-    if (!/^[\|\s\-:]+$/.test(rows[1])) return block;
-    let table = '<table>';
-    for (let r = 0; r < rows.length; r++) {
-      if (r === 1) continue; // 跳过分隔行
-      const cells = rows[r].split('|').filter(c => c.trim());
-      const tag = r === 0 ? 'th' : 'td';
-      table += '<tr>';
-      cells.forEach(c => { table += `<${tag}>${c.trim()}</${tag}>`; });
-      table += '</tr>';
-    }
-    table += '</table>';
-    return table;
-  });
-
-  // 逐行处理
-  const lines = html.split('\n');
-  const result = [];
-  let inList = null;  // 'ul' | 'ol' | null
-
-  function closeList() {
-    if (inList) {
-      result.push(`</${inList}>`);
-      inList = null;
-    }
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    // 空行不打断列表
-    if (line.trim() === '') {
-      continue;
-    }
-
-    // 行内代码 `...`
-    line = line.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // 粗体 **...**
-    line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-    // 标题（# 到 ######）
-    let hMatch = line.match(/^(#{1,6}) (.+)/);
-    if (hMatch) {
-      closeList();
-      result.push(`<h${hMatch[1].length}>${hMatch[2]}</h${hMatch[1].length}>`);
-      continue;
-    }
-
-    // 无序列表
-    let liMatch = line.match(/^[\-\*] (.+)/);
-    if (liMatch) {
-      if (inList !== 'ul') { closeList(); result.push('<ul>'); inList = 'ul'; }
-      result.push(`<li>${liMatch[1]}</li>`);
-      continue;
-    }
-
-    // 有序列表
-    liMatch = line.match(/^\d+\. (.+)/);
-    if (liMatch) {
-      if (inList !== 'ol') { closeList(); result.push('<ol>'); inList = 'ol'; }
-      result.push(`<li>${liMatch[1]}</li>`);
-      continue;
-    }
-
-    // 普通段落 → 结束列表
-    closeList();
-    result.push(line);
-  }
-  closeList();
-
-  html = result.join('\n');
-
-  // 还原代码块
-  html = html.replace(/%%CODEBLOCK_(\d+)%%/g, (_, id) => codeBlocks[parseInt(id)]);
-
-  return html;
-}
-
-// ==================== 工具函数 ====================
-
-function appendMsg(role, content) {
-  const chat = document.getElementById('chat');
-  const empty = chat.querySelector('.empty');
-  if (empty) empty.remove();
-
-  const div = document.createElement('div');
-  div.className = `msg ${role}`;
-  const bubbleHtml = role === 'assistant' ? renderMd(content) : escapeHtml(content);
-  const copyBtn = role === 'assistant'
-    ? '<button class="copy-btn" onclick="copyMsg(this)">📋</button>' : '';
-  div.innerHTML = `<div class="bubble">${copyBtn}${bubbleHtml}</div>`;
-  chat.appendChild(div);
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function scrollBottom() {
-  const chat = document.getElementById('chat');
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// ==================== 输入框：Enter 发送，Shift+Enter 换行 ====================
-
-document.getElementById('input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    send();
-  }
-});
-
-// 自动调整输入框高度
-document.getElementById('input').addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 150) + 'px';
-});
-
-init();
-</script>
+<script src="app.js?v=20260702-ocr-fix"></script>
 </body>
 </html>

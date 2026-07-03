@@ -1,0 +1,35 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local generated data
+chroma_db/
+sessions/
+extracted/
+
+# Test and model outputs
+tests/*_vision.json
+tests/*_analysis.json
+tests/batch_results.json
+label_result.json
+label_prep.jpg
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log

@@ -1,0 +1,46 @@
+# 食鉴 (Nutri AI) — Python 依赖
+# 安装: pip install -r requirements.txt
+# 最低 Python 版本: 3.11
+
+# Web 框架
+fastapi>=0.137.0
+uvicorn>=0.49.0
+starlette>=1.3.0
+
+# 数据校验
+pydantic>=2.13.0
+pydantic-settings>=2.14.0
+
+# RAG 引擎
+chromadb>=1.5.0
+sentence-transformers>=5.6.0
+
+# AI 模型
+torch>=2.12.0
+transformers>=5.12.0
+
+# API 调用 (DeepSeek / OpenAI 兼容)
+openai>=2.43.0
+httpx>=0.28.0
+
+# 缓存
+redis>=8.0.0
+
+# 图像处理
+pillow>=12.0.0
+
+# PDF 提取 (仅重建知识库时需要)
+# pymupdf>=1.24.0
+
+# 视觉识别 — PaddleOCR 方案 (仅 V2 扫描管线需要)
+# opencv-python>=4.10.0
+# paddleocr>=2.9.0
+# paddlepaddle>=3.0.0
+
+# 文件上传（FastAPI UploadFile）
+python-multipart>=0.0.20
+
+# 配置与工具
+python-dotenv>=1.2.0
+pyyaml>=6.0.0
+numpy>=2.4.0

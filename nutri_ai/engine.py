@@ -23,12 +23,11 @@ class BookRAG:
         chroma_path: str = "./chroma_db",
         collection_name: str = "nutrition_science",
     ):
-        print(f"[引擎] 加载嵌入模型: {model_name} ...")
-        self.model = SentenceTransformer(model_name)
-        print("[引擎] 模型加载完成。")
-
         self.chroma_path = chroma_path
         self.collection_name = collection_name
+        self.model_name = model_name
+        self.model = None
+        self.model_error = None
         os.makedirs(chroma_path, exist_ok=True)
 
         self.client = chromadb.PersistentClient(
@@ -36,6 +35,14 @@ class BookRAG:
             settings=Settings(anonymized_telemetry=False),
         )
         self.collection = self.client.get_or_create_collection(collection_name)
+
+        print(f"[引擎] 加载嵌入模型: {model_name} ...")
+        try:
+            self.model = SentenceTransformer(model_name)
+            print("[引擎] 模型加载完成。")
+        except Exception as e:
+            self.model_error = str(e)
+            print(f"[引擎] 嵌入模型加载失败，RAG 检索暂不可用: {e}")
 
     # ==================== 切块（章节感知） ====================
 
@@ -102,6 +109,9 @@ class BookRAG:
         流程：逐章切块 → 分批嵌入 → 分批写入 ChromaDB
         batch_size: 每批嵌入的块数（4090/4060 Ti 建议 500-800）
         """
+        if self.model is None:
+            raise RuntimeError(f"嵌入模型不可用，无法构建知识库: {self.model_error}")
+
         print(f"\n[建库] 共 {len(chapters)} 个章节，正在切块...")
 
         # 第一步：全量切块（切块本身不占显存，很快）
@@ -174,6 +184,9 @@ class BookRAG:
         """
         if self.collection.count() == 0:
             return []
+        if self.model is None:
+            print(f"[检索] 嵌入模型不可用，跳过 RAG 检索: {self.model_error}")
+            return []
 
         # 编码查询
         query_emb = self.model.encode(query)
@@ -206,6 +219,9 @@ class BookRAG:
 
     def search_and_format(self, query: str, n_results: int = 5) -> str:
         """检索并格式化为 LLM 可用的上下文。"""
+        if self.model is None:
+            return "知识库嵌入模型暂不可用，无法检索相关内容。"
+
         results = self.search(query, n_results)
 
         if not results:
@@ -230,4 +246,7 @@ class BookRAG:
             "total_chunks": count,
             "collection_name": self.collection_name,
             "chroma_path": self.chroma_path,
+            "model_name": self.model_name,
+            "model_ready": self.model is not None,
+            "model_error": self.model_error,
         }

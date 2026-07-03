@@ -1,16 +1,22 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ENV PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ENV PIP_DEFAULT_TIMEOUT=300
 ENV HF_ENDPOINT=https://hf-mirror.com
 
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn && echo "torch OK" \
-  && pip install --no-cache-dir fastapi uvicorn openai python-dotenv pydantic redis langchain langchain-openai && echo "web OK" \
-  && pip install --no-cache-dir sentence-transformers chromadb numpy && echo "ml OK"
-
 WORKDIR /app
+
+# 先装 torch（CPU 版，体积小），再装其余依赖
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && echo "torch OK"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && echo "deps OK"
+
 COPY . .
+
 VOLUME ["/app/chroma_db", "/app/sessions"]
 EXPOSE 8000
 

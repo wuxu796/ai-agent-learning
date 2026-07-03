@@ -21,15 +21,43 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    env_file:
+      - .env                          # 自动加载 .env 中的所有变量
     environment:
-      - REDIS_HOST=redis          # 用 docker compose 服务名当 host
+      - REDIS_HOST=redis              # 用 docker compose 服务名当 host
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?请设置 DEEPSEEK_API_KEY}
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+      - OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL:-qwen3-vl:8b}
       - HF_ENDPOINT=https://hf-mirror.com
-      - HF_HUB_OFFLINE=1            # 禁止联网，只用本地缓存的模型
+      - HF_HUB_OFFLINE=0              # 首次启动设为 0 让模型自动下载；缓存完毕后可改为 1
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./sessions:/app/sessions
+      - ./static:/app/static                 # 前端文件实时同步，改完刷新即可
       - ~/.cache/huggingface:/root/.cache/huggingface   # 复用宿主机的模型缓存，不用重复下载
     depends_on:
       - redis
+
+  # 旧的独立扫描服务。默认不启动；需要单独调试时：
+  # docker compose --profile scan-legacy up -d server_scan
+  server_scan:
+    profiles: ["scan-legacy"]
+    build: .
+    container_name: shijian-scan
+    restart: always
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?请设置 DEEPSEEK_API_KEY}
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_HUB_OFFLINE=0
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./static:/app/static
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    command: python -u server_scan.py
